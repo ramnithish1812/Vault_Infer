@@ -1,4 +1,7 @@
 import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface Props {
   input: string;
@@ -6,49 +9,91 @@ interface Props {
   onRestart: () => void;
 }
 
-function analyzeInput(input: string) {
-  const lower = input.toLowerCase();
-  const negWords = ["stress", "anxious", "worried", "sad", "depressed", "angry", "frustrated", "tired", "overwhelmed", "afraid", "scared"];
-  const posWords = ["happy", "great", "excited", "love", "wonderful", "amazing", "good", "fantastic"];
-  const qWords = ["?", "how", "what", "why", "when", "where", "who"];
-
-  const hasNeg = negWords.some(w => lower.includes(w));
-  const hasPos = posWords.some(w => lower.includes(w));
-  const hasQ = qWords.some(w => lower.includes(w));
-
-  let sentiment = "Neutral";
-  let confidence = 0.82;
-  let intent = "General Statement";
-  let response = "Your message has been analyzed through our encrypted pipeline. The AI inference was performed entirely on encrypted data, ensuring complete privacy.";
-
-  if (hasNeg) {
-    sentiment = "Negative";
-    confidence = 0.91;
-    intent = "Emotional Expression";
-    response = "It seems like you're going through a challenging time. Remember that it's okay to feel this way. Try breaking your tasks into smaller, manageable steps and take short breaks. Consider reaching out to someone you trust. You've got this.";
-  } else if (hasPos) {
-    sentiment = "Positive";
-    confidence = 0.94;
-    intent = "Positive Expression";
-    response = "It's great to hear you're feeling positive! Maintaining this mindset can help boost your productivity and relationships. Keep nurturing what brings you joy.";
-  } else if (hasQ) {
-    intent = "Information Seeking";
-    confidence = 0.87;
-    response = "Your question has been processed through our FHE pipeline. While I can provide encrypted analysis, I encourage you to explore trusted resources for detailed answers on this topic.";
-  }
-
-  return { sentiment, confidence, intent, response };
+interface AnalysisResult {
+  sentiment: string;
+  confidence: number;
+  intent: string;
+  response: string;
 }
 
 export default function OutputStage({ input, onHackerView, onRestart }: Props) {
-  const result = analyzeInput(input);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function classify() {
+      try {
+        const { data, error: fnError } = await supabase.functions.invoke("classify-intent", {
+          body: { input },
+        });
+
+        if (cancelled) return;
+
+        if (fnError) throw fnError;
+
+        setResult({
+          sentiment: data.sentiment,
+          confidence: data.confidence,
+          intent: data.intent,
+          response: data.response,
+        });
+      } catch (e: any) {
+        console.error("Classification error:", e);
+        if (!cancelled) {
+          setError(true);
+          toast.error("Classification failed. Showing fallback analysis.");
+          // Fallback to basic analysis
+          setResult({
+            sentiment: "Neutral",
+            confidence: 0.75,
+            intent: "General Statement",
+            response: "Your message has been analyzed through our encrypted pipeline. The AI inference was performed entirely on encrypted data, ensuring complete privacy.",
+          });
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    classify();
+    return () => { cancelled = true; };
+  }, [input]);
+
+  if (loading) {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="flex flex-col items-center justify-center min-h-screen px-4"
+      >
+        <h2 className="text-2xl font-display vault-glow-cyan text-vault-cyan mb-2">Running ML Inference</h2>
+        <p className="text-muted-foreground text-xs font-mono mb-8">CLASSIFYING INTENT · ANALYZING SENTIMENT</p>
+        <div className="vault-panel p-8 w-full max-w-xl flex flex-col items-center gap-4">
+          <motion.div
+            className="w-16 h-16 rounded-full border-2 border-vault-cyan border-t-transparent"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          />
+          <div className="flex gap-2 items-center">
+            <div className="w-2 h-2 rounded-full bg-vault-cyan animate-pulse" />
+            <span className="text-xs font-mono text-muted-foreground">ENCRYPTED NEURAL INFERENCE IN PROGRESS</span>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (!result) return null;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="flex flex-col items-center justify-center min-h-screen px-4"
     >
       <h2 className="text-2xl font-display vault-glow-cyan text-vault-cyan mb-2">Inference Complete</h2>
-      <p className="text-muted-foreground text-xs font-mono mb-8">PRIVACY-PRESERVED AI ANALYSIS</p>
+      <p className="text-muted-foreground text-xs font-mono mb-8">
+        {error ? "FALLBACK ANALYSIS" : "ML-POWERED PRIVACY-PRESERVED ANALYSIS"}
+      </p>
 
       <div className="vault-panel p-6 w-full max-w-xl space-y-4">
         {/* Input echo */}
