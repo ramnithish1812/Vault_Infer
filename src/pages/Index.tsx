@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { AnimatePresence } from "framer-motion";
+import { Link } from "react-router-dom";
 import Background3D from "@/components/Background3D";
 import BinaryRain from "@/components/BinaryRain";
 import StageIndicator from "@/components/StageIndicator";
@@ -29,6 +30,13 @@ const Index = () => {
       <Background3D />
       <BinaryRain />
       <StageIndicator currentStage={stage} />
+
+      <Link
+        to="/technical-report"
+        className="fixed right-4 top-4 z-30 rounded border border-border bg-card/70 px-3 py-2 font-display text-[10px] uppercase tracking-widest text-vault-cyan backdrop-blur-md transition-colors hover:text-foreground"
+      >
+        Technical Report
+      </Link>
 
       <div className="relative z-10 pt-12">
         <AnimatePresence mode="wait">
